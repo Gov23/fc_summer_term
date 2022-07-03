@@ -59,11 +59,14 @@ class Worker(threading.Thread):
             _ci = client_id.decode('utf-8')
             request = socket.recv().decode('utf-8')
 
-            print(f'this is client id {client_id}')
+            # print(f'this is client id {_ci}')
 
             if _ci == '1':
-                print('Worker ID - %s. Recieved Time %s.' % (self.worker_id, request))
-                result = request
+                print('Worker ID - %s has detected %s.' % (self.worker_id, request))
+                if request == 'No Mask':
+                    result = "Please wear a mask"
+                else:
+                    result = "Welcome"
             else:
                 print('Worker ID - %s. Recieved computation request.' % (self.worker_id))
                 result = self.compute(request)

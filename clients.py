@@ -1,13 +1,23 @@
 import threading
+import time
+import zmq
+import imutils
+import cv2
+import os
+
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow.keras.models import load_model
+from imutils.video import VideoStream
 
 from random import choice
 from datetime import datetime
 
-import zmq
+from detect_mask_video import videostream, detect_and_predict_mask
 
 class Client(threading.Thread):
     ''' Represents an example client. '''
-    def __init__(self, identity, ip):
+    def __init__(self, identity, ip='localhost'):
         threading.Thread.__init__(self)
         self.identity = identity
         self.ip = ip
@@ -33,10 +43,50 @@ class Client(threading.Thread):
             # air quality sensor
             if self.identity == '1':
                 print("inside id 1")
-                current = datetime.now()
-                dt = current.strftime("%m/%d/%Y %H:%M:%S")
-                self.send(socket, dt)
-            
+                
+                # grab the frame from the threaded video stream and resize it
+                # to have a maximum width of 400 pixels
+
+                frame = vs.read()
+                frame = imutils.resize(frame, width=400)
+
+                isMask = "No Mask"
+
+                # detect faces in the frame and determine if they are wearing a
+                # face mask or not
+                (locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
+
+                # loop over the detected face locations and their corresponding
+                # locations
+                for (box, pred) in zip(locs, preds):
+                    # unpack the bounding box and predictions
+                    (startX, startY, endX, endY) = box
+                    (mask, withoutMask) = pred
+
+                    # determine the class label and color we'll use to draw
+                    # the bounding box and text
+                    isMask = "Mask" if mask > withoutMask else "No Mask"
+                    color = (0, 255, 0) if isMask == "Mask" else (0, 0, 255)
+
+                    # include the probability in the label
+                    label = "{}: {:.2f}%".format(isMask, max(mask, withoutMask) * 100)
+
+                    # display the label and bounding box rectangle on the output
+                    # frame
+                    cv2.putText(frame, label, (startX, startY - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+                    cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
+
+                # show the output frame
+                self.send(socket, isMask)
+                cv2.imshow("Frame", frame)
+                key = cv2.waitKey(1) & 0xFF
+                # if the `q` key was pressed, break from the loop
+                if key == ord("q"):
+                    break
+                
+        
+
             # camera
             elif self.identity == '2':
                 print("inside id 2")
@@ -52,12 +102,13 @@ class Client(threading.Thread):
                     print('Client ID - %s. Recieved Time is %s' % (self.identity, result))
                 else:
                     print('Client ID - %s. Received result - %s.' % (self.identity, result))
-                break
+            #     break
 
-            if count>5:
-                break
+            # if count>5:
+            #     break
 
-                
+        cv2.destroyAllWindows()
+        vs.stop()    
         socket.close()
         self.zmq_context.term()
 
@@ -89,6 +140,10 @@ class Client(threading.Thread):
 if __name__ == '__main__':
     # Instantiate three clients with different ID's.
     ip = '34.159.53.31'
-    for i in range(1,3):
-        client = Client(str(i), ip=ip)
+    vs, faceNet, maskNet = videostream()
+    vs = vs.start()
+    time.sleep(2)
+    for i in range(1,2):
+        client = Client(str(i))
+        # client = Client(str(i), ip=ip)
         client.start()
