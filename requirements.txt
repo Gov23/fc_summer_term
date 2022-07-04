@@ -1,0 +1,13 @@
+tensorflow
+numpy
+scipy
+keras
+opencv-python
+matplotlib
+argparse
+scikit-learn
+pillow
+onnx
+tf2onnx
+imutils
+pyzmq
