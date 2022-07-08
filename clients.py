@@ -1,4 +1,5 @@
 import threading
+import socket
 import time
 import zmq
 import imutils
@@ -15,12 +16,23 @@ from datetime import datetime
 
 from detect_mask_video import videostream, detect_and_predict_mask
 
+def isConnected(host, port, timeout_second=1):
+    # test connectivity
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout_second)
+    result = sock.connect_ex((host, int(port)))
+    if result == 0:
+        return True
+    else:
+        return False
+
 class Client(threading.Thread):
     ''' Represents an example client. '''
-    def __init__(self, identity, ip='localhost'):
+    def __init__(self, identity, ip='localhost', port=5001):
         threading.Thread.__init__(self)
         self.identity = identity
         self.ip = ip
+        self.port = port
         self.zmq_context = zmq.Context()
 
     def run(self):
@@ -127,7 +139,7 @@ class Client(threading.Thread):
         # It prepends identity of the socket with each message.
         socket = self.zmq_context.socket(zmq.DEALER)
         socket.setsockopt_string(zmq.IDENTITY, self.identity)
-        socket.connect(f'tcp://{self.ip}:5001')
+        socket.connect(f'tcp://{self.ip}:{self.port}')
         return socket
 
     def generate_numbers(self):
@@ -140,10 +152,12 @@ class Client(threading.Thread):
 if __name__ == '__main__':
     # Instantiate three clients with different ID's.
     ip = '34.159.53.31'
+    ip2 = '35.207.94.238'
     vs, faceNet, maskNet = videostream()
     vs = vs.start()
     time.sleep(2)
-    for i in range(1,2):
-        client = Client(str(i))
-        # client = Client(str(i), ip=ip)
-        client.start()
+
+    # for i in range(1,2):
+    #     client = Client(str(i))
+    #     # client = Client(str(i), ip=ip2)
+    #     client.start()
