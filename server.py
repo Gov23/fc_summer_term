@@ -42,7 +42,6 @@ class Worker(threading.Thread):
         threading.Thread.__init__(self)
         self.zmq_context = zmq_context
         self.worker_id = _id
-
         print('this is id')
         print(self.worker_id)
         print(type(self.worker_id))
@@ -68,7 +67,7 @@ class Worker(threading.Thread):
                 else:
                     result = "Welcome"
             else:
-                print('Worker ID - %s. Recieved computation request.' % (self.worker_id))
+                print('Worker ID - %s. Received computation request.' % (self.worker_id))
                 result = self.compute(request)
                 print('Worker ID - %s. Sending computed result back.' % (self.worker_id))
 

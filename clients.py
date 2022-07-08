@@ -5,6 +5,7 @@ import zmq
 import imutils
 import cv2
 import os
+import json
 
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
@@ -50,11 +51,12 @@ class Client(threading.Thread):
         # Polling is used to check for sockets with data before reading because socket.recv() is blocking.
         count = 0
         while True:
-            # Poll for 5 seconds. Return any sockets with data to be read.
+            time.sleep(1)# Poll for 5 seconds. Return any sockets with data to be read.
             count+=1
             # air quality sensor
             if self.identity == '1':
-                print("inside id 1")
+                
+                print("Camera")
                 
                 # grab the frame from the threaded video stream and resize it
                 # to have a maximum width of 400 pixels
@@ -99,14 +101,26 @@ class Client(threading.Thread):
                 
         
 
-            # camera
+            # air quality sensor
             elif self.identity == '2':
-                print("inside id 2")
+                print("Air Quality")
+                #idea:
+                #have a starting value of 750, have it increase by 10 or 20 every second
+                #once it reaches 850, we start air conditioning, which then decreases number 
+                #once it goes down to 600, stop air conditioning to save electricity
+                #goes back up
                 num1, num2 = self.generate_numbers()
                 self.send(socket, '%s:%s' % (num1, num2))
+            #door opener
+            elif self.identity == '3':
+                print("Door")
+                continue
+            #air conditioning unit
+            elif self.identity == '4':
+                print("Air Conditioning")
+                continue
 
-
-            sockets = dict(poller.poll(5000))
+            sockets = dict(poller.poll(1000))
             # If socket has data to be read.
             if socket in sockets and sockets[socket] == zmq.POLLIN:
                 result = self.receive(socket)
@@ -156,8 +170,11 @@ if __name__ == '__main__':
     vs, faceNet, maskNet = videostream()
     vs = vs.start()
     time.sleep(2)
-
-    # for i in range(1,2):
-    #     client = Client(str(i))
-    #     # client = Client(str(i), ip=ip2)
-    #     client.start()
+    f = open('config.json')
+    data = json.load(f)
+    for client in data['clients']:
+         print(client['id'])
+         client = Client(client['id'],client['ip'], client['port'])
+    #    # client = Client(str(i), ip=ip2)
+         client.start()
+    f.close()
