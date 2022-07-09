@@ -13,7 +13,7 @@ from tensorflow.keras.models import load_model
 from imutils.video import VideoStream
 
 from random import choice
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from detect_mask_video import videostream, detect_and_predict_mask
 
@@ -27,32 +27,58 @@ def isConnected(host, port, timeout_second=1):
     else:
         return False
 
+def get_co2value(sec):
+    return co2[sec]
+
 class Client(threading.Thread):
     ''' Represents an example client. '''
-    def __init__(self, identity, ip='localhost', port=5001):
+    def __init__(self, identity, ip='localhost', port=5001, timeout=10):
         threading.Thread.__init__(self)
         self.identity = identity
         self.ip = ip
         self.port = port
+        self.timeout = timeout
         self.zmq_context = zmq.Context()
+        
+        '''
+        messages in queue are for reliability checking
+        is a list of dictionaries containing keys
+        1. uid: a unique id of the certain message
+        2. body: the content of the message
+        3. isAcked: whether the messages is acked or not
+        4. timestamp: the time when the message was sent
+        '''
+        self.queue = []
 
     def run(self):
         ''' Connects to server. Send compute request, poll for and print result to standard out. '''
-        # num1, num2 = self.generate_numbers()
-        # print('Client ID - %s. Numbers to be added - %s and %s.' % (self.identity, num1, num2))
+
         socket = self.get_connection()
         
         # Poller is used to check for availability of data before reading from a socket.
         poller = zmq.Poller()
         poller.register(socket, zmq.POLLIN)
-        # self.send(socket, '%s:%s' % (num1, num2))
 
         # Infinitely poll for the result. 
         # Polling is used to check for sockets with data before reading because socket.recv() is blocking.
-        count = 0
+        uid = 0
         while True:
-            time.sleep(1)# Poll for 5 seconds. Return any sockets with data to be read.
-            count+=1
+
+            if not isConnected(self.ip, self.port):
+                time.sleep(10)
+
+            if self.msginQueue():
+                for msg in self.queue:
+                    try:
+                        if msg["timestamp"]+timedelta(0,self.timeout) >= datetime.now() and not msg["isAckd"]:
+                            print("msg sent from queue")
+                            self.send(socket, f'{msg["uid"]};{msg["body"]}')
+                    except:
+                        break
+                    
+            # don't need to run calculation constantly
+            time.sleep(2)
+            
             # air quality sensor
             if self.identity == '1':
                 
@@ -92,14 +118,19 @@ class Client(threading.Thread):
                     cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
 
                 # show the output frame
-                self.send(socket, isMask)
+                print(f"send message with uid:{uid}")
+                self.send(socket, f"{uid};{isMask}")
+                self.queue.append({
+                    "uid":uid, 
+                    "timestamp": datetime.now(),
+                    "body": isMask,
+                    "isAcked": False
+                    })
                 cv2.imshow("Frame", frame)
                 key = cv2.waitKey(1) & 0xFF
                 # if the `q` key was pressed, break from the loop
                 if key == ord("q"):
                     break
-                
-        
 
             # air quality sensor
             elif self.identity == '2':
@@ -109,8 +140,14 @@ class Client(threading.Thread):
                 #once it reaches 850, we start air conditioning, which then decreases number 
                 #once it goes down to 600, stop air conditioning to save electricity
                 #goes back up
-                num1, num2 = self.generate_numbers()
-                self.send(socket, '%s:%s' % (num1, num2))
+                co2 = get_co2value(datetime.now().second)
+                self.send(socket, f'{uid};{co2}')
+                self.queue.append({
+                    "uid":uid, 
+                    "timestamp": datetime.now(),
+                    "body": co2,
+                    "isAcked": False
+                    })
             #door opener
             elif self.identity == '3':
                 print("Door")
@@ -123,20 +160,28 @@ class Client(threading.Thread):
             sockets = dict(poller.poll(1000))
             # If socket has data to be read.
             if socket in sockets and sockets[socket] == zmq.POLLIN:
-                result = self.receive(socket)
+                result_ = self.receive(socket).decode('utf-8')
+                uuid, result = result_.split(';')[0], result_.split(';')[1]
+                for i, msg in enumerate(self.queue):
+                    if msg["uid"] == uuid:
+                        self.queue.pop(i)
+                        
                 if self.identity == '1':
                     print('Client ID - %s. Recieved Time is %s' % (self.identity, result))
                 else:
-                    print('Client ID - %s. Received result - %s.' % (self.identity, result))
+                    print('Client ID - %s. Received result: We should %s the air Conditioner.' % (self.identity, result))
             #     break
-
-            # if count>5:
-            #     break
+            uid += 1
 
         cv2.destroyAllWindows()
         vs.stop()    
         socket.close()
         self.zmq_context.term()
+
+    def msginQueue(self):
+        if len(self.queue) != 0:
+            return True
+        return False
 
     def send(self, socket, data):
         ''' Send data through provided socket. '''
@@ -147,8 +192,10 @@ class Client(threading.Thread):
         return socket.recv()
 
     def get_connection(self):
-        ''' Create a zeromq socket of type DEALER; set it's identity, connect to server and return socket. '''
-
+        ''' 
+            Create a zeromq socket of type DEALER; 
+            set it's identity, connect to server and return socket.
+        '''
         # Socket type DEALER is used in asynchronous request/reply patterns.
         # It prepends identity of the socket with each message.
         socket = self.zmq_context.socket(zmq.DEALER)
@@ -156,25 +203,23 @@ class Client(threading.Thread):
         socket.connect(f'tcp://{self.ip}:{self.port}')
         return socket
 
-    def generate_numbers(self):
-        ''' Generate and return a pair of numbers. '''
-        number_list = range(0,10)
-        num1 = choice(number_list)
-        num2 = choice(number_list)
-        return num1, num2
-
 if __name__ == '__main__':
     # Instantiate three clients with different ID's.
-    ip = '34.159.53.31'
-    ip2 = '35.207.94.238'
     vs, faceNet, maskNet = videostream()
     vs = vs.start()
     time.sleep(2)
     f = open('config.json')
     data = json.load(f)
+    ip = data["ip_local"]
+    ip2 = data["ip_cloud"]
+    port = data["port"]
+
+    with open("co2.txt") as f:
+        co2 = f.readline()
+    co2 = co2.split(', ')
+
     for client in data['clients']:
-         print(client['id'])
-         client = Client(client['id'],client['ip'], client['port'])
-    #    # client = Client(str(i), ip=ip2)
-         client.start()
+        print(client['id'])
+        client = Client(client['id'], ip, port)
+        client.start()
     f.close()
