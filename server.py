@@ -42,7 +42,6 @@ class Worker(threading.Thread):
         threading.Thread.__init__(self)
         self.zmq_context = zmq_context
         self.worker_id = _id
-
         print('this is id')
         print(self.worker_id)
         print(type(self.worker_id))
@@ -57,26 +56,29 @@ class Worker(threading.Thread):
             # First string recieved is socket ID of client
             client_id = socket.recv()
             _ci = client_id.decode('utf-8')
-            request = socket.recv().decode('utf-8')
+            request_ = socket.recv().decode('utf-8')
+            uid, request = request_.split(';')[0], request_.split(';')[1]
 
-            print(f'this is client id {client_id}')
+            # print(f'this is client id {client_id}')
 
             if _ci == '1':
-                print('Worker ID - %s. Recieved Time %s.' % (self.worker_id, request))
-                result = request
+                print('Worker ID - %s has detected %s.' % (self.worker_id, request))
+                if request == 'No Mask':
+                    result = "Please wear a mask"
+                else:
+                    result = "Welcome"
+
+                socket.send(client_id, zmq.SNDMORE)
+                socket.send_string('{};{}'.format(uid, result))
             else:
-                print('Worker ID - %s. Recieved computation request.' % (self.worker_id))
-                result = self.compute(request)
-                print('Worker ID - %s. Sending computed result back.' % (self.worker_id))
+                print('Worker ID - %s. Received CO2 level of %s.' % (self.worker_id, request))
+                result = 'Open' if int(request) > 750 else 'Close'
+
+                socket.send(client_id, zmq.SNDMORE)
+                socket.send_string("{};{}".format(uid, result))
 
             # For successful routing of result to correct client, the socket ID of client should be sent first.
-            socket.send(client_id, zmq.SNDMORE)
-            socket.send_string(result)
-
-    def compute(self, request):
-        ''' Computation takes place here. Adds the two numbers which are in the request and return result. '''
-        numbers = request.split(':')
-        return str(int(numbers[0]) + int(numbers[1]))
+            
 
 if __name__ == '__main__':
     server = Server().start()

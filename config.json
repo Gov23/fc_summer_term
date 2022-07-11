@@ -1,0 +1,22 @@
+{   
+    "ip_local": "localhost",
+    "ip_cloud": "35.207.94.238",
+    "port": "5001",
+    "clients":[
+    {
+        "id": "1",
+        "context": "default"
+    },
+    {
+        "id": "2",
+        "context": "default"
+    },
+    {
+        "id": "3",
+        "context": "default"
+    },
+    {
+        "id": "4",
+        "context": "default"
+    }]
+}
