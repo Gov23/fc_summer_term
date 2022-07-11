@@ -167,10 +167,10 @@ class Client(threading.Thread):
                         self.queue.pop(i)
                         
                 if self.identity == '1':
-                    print('Client ID - %s. Recieved Time is %s' % (self.identity, result))
+                    print('Client ID - %s. %s' % (self.identity, result))
                 else:
-                    print('Client ID - %s. Received result: We should %s the air Conditioner.' % (self.identity, result))
-            #     break
+                    print('Client ID - %s. Received result: %s the air Conditioner.' % (self.identity, result))   
+            #break
             uid += 1
 
         cv2.destroyAllWindows()

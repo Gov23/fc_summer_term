@@ -59,7 +59,7 @@ class Worker(threading.Thread):
             request_ = socket.recv().decode('utf-8')
             uid, request = request_.split(';')[0], request_.split(';')[1]
 
-            # print(f'this is client id {_ci}')
+            print(f'this is client id {client_id}')
 
             if _ci == '1':
                 print('Worker ID - %s has detected %s.' % (self.worker_id, request))
@@ -67,13 +67,18 @@ class Worker(threading.Thread):
                     result = "Please wear a mask"
                 else:
                     result = "Welcome"
+
+                socket.send(client_id, zmq.SNDMORE)
+                socket.send_string(f'{uid};{result}')
             else:
                 print('Worker ID - %s. Received CO2 level of %s.' % (self.worker_id, request))
                 result = 'Open' if int(request) > 750 else 'Close'
 
+                socket.send(client_id, zmq.SNDMORE)
+                socket.send_string(f'{uid};{result}')
+
             # For successful routing of result to correct client, the socket ID of client should be sent first.
-            socket.send(client_id, zmq.SNDMORE)
-            socket.send_string(f'{uid};{result}')
+            
 
 if __name__ == '__main__':
     server = Server().start()
