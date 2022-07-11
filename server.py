@@ -59,7 +59,7 @@ class Worker(threading.Thread):
             request_ = socket.recv().decode('utf-8')
             uid, request = request_.split(';')[0], request_.split(';')[1]
 
-            print(f'this is client id {client_id}')
+            # print(f'this is client id {client_id}')
 
             if _ci == '1':
                 print('Worker ID - %s has detected %s.' % (self.worker_id, request))
