@@ -69,13 +69,13 @@ class Worker(threading.Thread):
                     result = "Welcome"
 
                 socket.send(client_id, zmq.SNDMORE)
-                socket.send_string(f'{uid};{result}')
+                socket.send_string('{};{}'.format(uid, result))
             else:
                 print('Worker ID - %s. Received CO2 level of %s.' % (self.worker_id, request))
                 result = 'Open' if int(request) > 750 else 'Close'
 
                 socket.send(client_id, zmq.SNDMORE)
-                socket.send_string(f'{uid};{result}')
+                socket.send_string("{};{}".format(uid, result))
 
             # For successful routing of result to correct client, the socket ID of client should be sent first.
             
